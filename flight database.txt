@@ -1,0 +1,261 @@
+Custommer, Flight annd reservationn tables****************************************
+
+create table customer(
+CID number(5) primary key,
+Fname varchar2(20) not null,
+Lname varchar2(20) not null,
+Address varchar2(30) not null,
+city varchar2(30) not null,
+C_state varchar2(10) not null,
+Email varchar2(30) not null,
+phone varchar2(25));
+
+create table flight(
+FID number(5) primary key,
+Departure varchar2(30) not null,
+destination varchar2(30) not null,
+Fare decimal(6,2) not null,
+flight_date varchar2(25) not null,
+Num_of_seats_remaining number(5) not null);
+
+
+create table reservation(
+RID number(5) primary key,
+CID number(5) not null,
+FID number(5) not null,
+Seats_reserved number(2) not null,
+Total_price number(6,2) not null,
+constraint FK_CustomerID foreign key (CID) references customer(CID),
+constraint FK_FlightID foreign key (FID) references flight(FID));
+
+insert into reservation values(300, 100, 201, 2, 460);
+insert into reservation values(301, 100, 205, 1, 150);
+insert into reservation values(302, 101, 201, 3, 690);
+insert into reservation values(303, 102, 201, 1, 230);
+insert into reservation values(304, 101, 204, 2, 300);
+
+
+Customer Functions*****************************************************************
+sequence to increment customers ID**************************************************************
+
+create sequence cust_seq
+start with 100
+increment by 1
+cache 100;
+
+*******************************/* 1.cusomter procedure for adding a new customer*/**********************************************************
+create or replace procedure new_customer(v_fname in customer.fname%type, v_lname in customer.lname%type, 
+v_address in customer.address%type, v_city in customer.city%type,
+v_state in customer.c_state%type, v_email in customer.email%type, v_phone in customer.phone%type)
+is
+begin
+insert into customer values (cust_seq.nextval, v_fname, v_lname, v_address, v_city, v_state, v_email, v_phone);
+dbms_output.put_line('You are registered, and your ID is ' || cust_seq.currval);
+end;
+
+
+execute new_customer('Damian', 'Banner', '121-02 Place', 'NYC', 'NY', 'dbanner@gmail.com', '171-540-0023');
+execute new_customer('Sammy', 'Butler', '631-00 Avenue', 'Albany', 'CA', 'samb@gmail.com', '002-033-6544');
+
+**************************************/*2.search for a flight by giving the source, destination and date*/**********************************************************************8
+create or replace procedure departure_destination_date(v_departure in flight.departure%type, v_destination in 
+flight.destination%type, v_date in flight.flight_date%type)
+as
+x_departure flight.departure%type;
+x_destination flight.destination%type;
+x_date flight.flight_date%type;
+v_fare flight.fare%type;
+cursor flight_info is
+select departure, destination, flight_date, fare
+from flight
+where departure = v_departure and destination = v_destination 
+and flight_date = v_date;
+begin
+open flight_info;
+loop
+fetch flight_info into x_departure, x_destination, x_date, v_fare;
+exit when flight_info%notfound;
+dbms_output.put_line('Departing from: ' || x_departure || ' arriving to: ' || x_destination || ' on ' || x_date || ' with a fare of: ' || v_fare);
+end loop;
+close flight_info;
+end;
+
+execute departure_destination_date('LAX', 'JFK', '08-05-20');
+
+*************************************question 3*************************************************
+
+/*3. make a reservation and subtract seat*/
+
+create or replace procedure create_reservation(v_cid in reservation.cid%type, v_fid in reservation.fid%type, 
+v_seats in reservation.seats_reserved%type)
+as
+v_fare flight.fare%type;
+v_rid reservation.rid%type;
+v_total_price reservation.total_price%type;
+begin 
+insert into reservation values(res_seq.nextval, v_cid, v_fid, v_seats, null);
+
+
+select fare into v_fare from flight
+where fid = v_fid;
+
+update flight
+set num_of_seats_remaining = num_of_seats_remaining - v_seats
+where fid = v_fid;
+
+v_rid := res_seq.currval;
+
+update reservation
+set total_price = v_fare * v_seats
+where rid = v_rid;
+
+select total_price into v_total_price
+from reservation
+where rid = v_rid;
+
+dbms_output.put_line('You have created a new reservation, its ID is ' || res_seq.currval || ' and the total price is $'
+|| v_total_price);
+
+end;
+
+execute create_reservation(102, 208, 2);
+
+
+******************************************/*4. view customers reservations with his ID*/***********************************
+
+create or replace procedure view_reservations(v_cid in reservation.cid%type)
+as
+v_rid reservation.rid%type;
+v_fid reservation.fid%type;
+v_seats reservation.seats_reserved%type;
+v_price reservation.total_price%type;
+cursor cust_reservation is 
+select rid, fid, seats_reserved, total_price
+from reservation
+where cid = v_cid;
+begin
+open cust_reservation;
+loop
+fetch cust_reservation into v_rid, v_fid, v_seats, v_price;
+exit when cust_reservation%notfound;
+dbms_output.put_line('Your reservation: ' || v_rid || ' for flight: ' || v_fid || ' with ' || v_seats || 
+' seats for a total price of $' || v_price);
+end loop;
+close cust_reservation;
+end;
+
+execute view_reservations(100);
+
+
+Admin Functions*********************************************************************************
+
+*************************************************/*1.view all flight details from source*/******************************************************************
+create or replace procedure search_flights_on_departure(v_departure in flight.departure%type)
+as
+v_fid flight.fid%type;
+x_departure flight.departure%type;
+v_destination flight.destination%type;
+v_fare flight.fare%type;
+v_flight_date flight.flight_date%type;
+v_seats flight.num_of_seats_remaining%type;
+cursor flight_details is
+select fid, departure, destination, fare, flight_date, num_of_seats_remaining
+from flight
+where departure = v_departure;
+begin
+open flight_details;
+loop
+fetch flight_details into v_fid, x_departure, v_destination, v_fare, v_flight_date, v_seats;
+exit when flight_details%notfound;
+dbms_output.put_line(v_fid || ' ' || x_departure || ' ' || v_destination || ' ' ||
+v_fare || ' ' || v_flight_date || ' ' || v_seats);
+end loop;
+close flight_details;
+end;
+
+execute search_flights_on_departure('JFK');
+
+**********************************************************/*2.change the fare of a flight*/***********************************************************************
+create or replace procedure update_flight_fare(v_fid in flight.fid%type, v_fare in flight.fare%type)
+as
+begin
+update flight 
+set fare = v_fare
+where fid = v_fid;
+end;
+
+execute update_flight_fare(202, 320.45);
+
+***********************************************/*3. Should be able to see all the reservations on a given flight*/**************************************************
+create or replace procedure find_flight_reservation(v_fid in reservation.fid%type)
+as
+v_rid reservation.rid%type;
+v_cid reservation.cid%type;
+x_fid reservation.fid%type;
+seats reservation.seats_reserved%type;
+v_price reservation.total_price%type;
+cursor reservation_info is
+select rid, cid, fid, seats_reserved, total_price
+from reservation
+where fid = v_fid;
+begin
+open reservation_info;
+loop
+fetch reservation_info into v_rid, v_cid, x_fid, seats, v_price;
+exit when reservation_info%notfound;
+dbms_output.put_line('reservation: ' || v_rid || ' made by customer: ' || v_cid || ' on flight: ' ||
+x_fid || ' for ' || seats || ' seats ' || 'with a total price of $' || v_price);
+end loop;
+close reservation_info;
+end;
+
+execute find_flight_reservation(201);
+
+*****************************************************/*4.view any customers details by customers id*/************************************************************
+create or replace procedure find_customer_info(v_cid in customer.cid%type)
+as
+x_cid customer.cid%type;
+v_fname customer.fname%type;
+v_lname customer.lname%type;
+v_address customer.address%type;
+v_city customer.city%type;
+v_state customer.c_state%type;
+v_email customer.email%type;
+v_phone customer.phone%type;
+cursor get_customer is
+select cid, fname, lname, address, city, c_state, email, phone from customer
+where cid = v_cid;
+begin
+open get_customer;
+loop
+fetch get_customer into x_cid, v_fname, v_lname, v_address, v_city, v_state, v_email, v_phone;
+exit when get_customer%notfound;
+dbms_output.put_line(x_cid || ' ' || v_fname || ' ' || v_lname || ' ' || v_address || ' ' || v_city || ' ' || v_state || ' ' || v_email || ' ' || v_phone);
+end loop;
+close get_customer;
+end;
+
+execute find_customer_info(100);
+
+
+
+*******************************************************5. add a new flight**********************************************************************
+/* admin procedure for adding a new flight*/
+
+create or replace procedure new_flight(v_departure in flight.departure%type, v_des in flight.destination%type, 
+v_fare in flight.fare%type, v_date in flight.flight_date%type,
+v_seats in flight.num_of_seats_remaining%type)
+is
+begin
+insert into flight values (flight_seq.nextval, v_departure, v_des, v_fare, v_date, v_seats);
+dbms_output.put_line('You have added a flight, its ID is ' || flight_seq.currval);
+end;
+
+execute new_flight('JFK', 'LAX', 200, '02-20-19', 100);
+
+/*sequence for flight id*/********************************************************8
+
+create sequence flight_seq
+start with 200
+increment by 1
+cache 100;
