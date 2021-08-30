@@ -22,7 +22,7 @@ set saledateconverted = CONVERT(date,saledate);
 
 -------------------------------------------------------------------------------------------------------
 
--- populate property address using parcellid with a property adress 
+-- populate property address using parcellid with a property address 
 
 select *
 from NashvilleHousing
